@@ -43,9 +43,6 @@ public class CrptApi {
         Document document = new Document(description, "ccc", "ccc", "ccc", true, "ccc", "ccc", "ccc", new Date(2010-10-10), "ccc", product_list, new Date(2009-9-9), "ccc");
 
         String signature = "Специальная подпись";
-        // this.description=description;
-        // this.signature=signature;
-        // CrptApi crptApi=new CrptApi(TimeUnit.MILLISECONDS, 1000);
 
         crptApi.createDocument(document, signature);
     }
