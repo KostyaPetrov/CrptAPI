@@ -1,9 +1,11 @@
 package ru.konstantinpetrov;
 
+import java.util.logging.Logger;
 import java.sql.Date;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
@@ -18,11 +20,19 @@ import lombok.Data;
 
 public class CrptApi {
 
-    private final String URL = "https://ismp.crpt.ru/api/v3/lk/documents/create";
+    private final String BASE_URL = "https://ismp.crpt.ru/api/v3/lk/";
 
+    private static final Logger LOGGER = Logger.getLogger(CrptApi.class.getName());
 
+    private TimeUnit timeUnit;
+    private int requestLimit;
+    private AtomicInteger requestCounter = new AtomicInteger(0);
+    private long lastResetTime = System.currentTimeMillis();
+    
 
     public CrptApi(TimeUnit timeUnit, int requestLimit) {
+        this.timeUnit=timeUnit;
+        this.requestLimit=requestLimit;
     }
 
 
@@ -30,52 +40,67 @@ public class CrptApi {
 
         CrptApi crptApi=new CrptApi(TimeUnit.MILLISECONDS, 1000);
 
-        Product product1 = new Product("aaa", new Date(2012-12-12), "111", "aaa", "aaa", new Date(2012-12-12), "aaa", "aaa", "aaa");
-        Product product2 = new Product("bbb", new Date(2011-11-11), "222", "bbb", "bbb", new Date(2011-11-11), "bbb", "bbb", "bbb");
+        Product product1 = new Product("certificate_document_1235", new Date(2012-12-12), "15946247547", "Raisa", "Alex", new Date(2012-12-12), "as234kad4", ";lset90323nrk", "gneruv934b5b2n50");
+        Product product2 = new Product("certificate_document_6547", new Date(2011-11-11), "54165132165", "Margarita", "Vilena", new Date(2011-11-11), "ppcvo43wemrfu83", "m0c8w09enc8r9ehvun", "vn9qw8pas2d94tguev");
 
-        Description description = new Description("rrr");
+        Description description = new Description("Document for goods 37562");
 
 
         List<Product> product_list = new ArrayList<>();
         product_list.add(product1);
         product_list.add(product2);
 
-        Document document = new Document(description, "ccc", "ccc", "ccc", true, "ccc", "ccc", "ccc", new Date(2010-10-10), "ccc", product_list, new Date(2009-9-9), "ccc");
+        Document document = new Document(description, "12547", "Saved", "added", true, "Sofi", "Raul", "234", new Date(2010-10-10), "295478", product_list, new Date(2009-9-9), "65857");
 
-        String signature = "Специальная подпись";
+        String signature = "Специальная подпись 6774851";
 
         crptApi.createDocument(document, signature);
     }
 
     public void createDocument(Document document, String signature){
-        
-        ResponseDTO responseDTO = new ResponseDTO(document, signature);
-
-        Gson gson = new Gson();
-        String jsonDocument = gson.toJson(responseDTO);
-
-        
-
-        try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
-            HttpPost httpPost = new HttpPost(URL);
-            httpPost.setHeader("Content-Type", "application/json");
-
-            StringEntity stringEntity = new StringEntity(jsonDocument, ContentType.APPLICATION_JSON);
-            httpPost.setEntity(stringEntity);
-
-            try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
-                int executeStatusCode = response.getStatusLine().getStatusCode();
-                if (executeStatusCode == 200) {
-                    System.out.println("Document was created");
-                } else {
-                    System.out.println("Error to create a document\n Code error: " + executeStatusCode);
-                }            
-            }catch(Exception e) {
-                e.printStackTrace();
+        synchronized(this){
+            long currentTime = System.currentTimeMillis();
+            if (currentTime - lastResetTime >= this.timeUnit.toMillis(1)) {
+                requestCounter.set(0);
+                lastResetTime = currentTime;
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }    
+            while (requestCounter.get() >= requestLimit) {
+                try {
+                    wait(this.timeUnit.toMillis(1));
+                } catch (InterruptedException e) {
+                    LOGGER.severe("Error to block process");
+                }
+                currentTime = System.currentTimeMillis();
+                if (currentTime - lastResetTime >= this.timeUnit.toMillis(1)) {
+                    requestCounter.set(0);
+                    lastResetTime = currentTime;
+                }
+            }
+
+            requestCounter.incrementAndGet();
+
+            ResponseDTO responseDTO = new ResponseDTO(document, signature);
+
+            Gson gson = new Gson();
+            String jsonDocument = gson.toJson(responseDTO);
+
+            
+
+            try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
+                HttpPost httpPost = new HttpPost(this.BASE_URL+"documents/create");
+                httpPost.setHeader("Content-Type", "application/json");
+
+                StringEntity stringEntity = new StringEntity(jsonDocument, ContentType.APPLICATION_JSON);
+                httpPost.setEntity(stringEntity);
+
+                try (CloseableHttpResponse response = httpClient.execute(httpPost)) {         
+                }catch(Exception e) {
+                    LOGGER.severe("Error to create a document");
+                }
+            } catch (Exception e) {
+                LOGGER.severe("Error to create CloseableHttpClient instance");
+            }    
+        }
 
     }
 
